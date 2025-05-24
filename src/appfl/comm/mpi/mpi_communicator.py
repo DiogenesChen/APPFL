@@ -4,6 +4,7 @@ from mpi4py import MPI
 from collections import OrderedDict
 from appfl.compressor import Compressor
 from typing import Any, Optional, Union
+import time
 
 class MpiCommunicator:
     """
@@ -34,11 +35,14 @@ class MpiCommunicator:
         :param `source`: the rank of the source MPI process that scatters the contents
         :return `content`: the content received by the current MPI process
         """
+        global_scatter_start = time.time()
         if source == self.comm_rank:
             assert (
                 len(contents) == self.comm_size
             ), "The size of the contents is not equal to the number of clients in scatter!"
         content = self.comm.scatter(contents, root=source)
+        global_scatter_end = time.time()
+        print(f"======{self.comm_rank} scatter: message length {len(contents)}, spent time {global_scatter_end - global_scatter_start}, start at {global_scatter_start}, end at {global_scatter_end}======", flush=True)
         return content
 
     def gather(self, content, dest: int):
@@ -48,7 +52,10 @@ class MpiCommunicator:
         :param `dest`: the rank of the destination MPI process that gathers the contents
         :return `contents`: a list of contents received by the destination MPI process
         """
+        global_gather_start = time.time()
         contents = self.comm.gather(content, root=dest)
+        global_gather_end = time.time()
+        print(f"======{self.comm_rank} gather: message length {len(contents)}, spent time {global_gather_end - global_gather_start}, start at {global_gather_start}, end at {global_gather_end}======", flush=True)
         return contents
 
     def broadcast_global_model(self, model: Optional[Union[dict, OrderedDict]]=None, args: Optional[dict]=None):
@@ -58,6 +65,7 @@ class MpiCommunicator:
         :param `model`: the global model state dictionary to be broadcasted
         :param `args`: additional arguments to be broadcasted
         """
+        global_broadcast_start = time.time()
         self.dests = (
             [i for i in range(self.comm_size) if i != self.comm_rank]
             if len(self.dests) == 0
@@ -80,6 +88,8 @@ class MpiCommunicator:
                 )
             self.recv_queue = [self.comm.irecv(source=i, tag=i) for i in self.dests]
             self.queue_status = [True for _ in range(self.comm_size - 1)]
+            global_broadcast_end = time.time()
+            print(f"======{self.comm_rank} broadcast: message length {len(model_bytes)}, times {len(self.dests)}, spent time {global_broadcast_end - global_broadcast_start}, start at {global_broadcast_start}, end at {global_broadcast_end}======", flush=True)
 
     def send_global_model_to_client(self, model: Optional[Union[dict, OrderedDict]]=None, args: Optional[dict]=None, client_idx: int=-1):
         """
@@ -88,6 +98,7 @@ class MpiCommunicator:
         :param `args`: additional arguments to be sent
         :param `client_idx`: the index of the destination client
         """
+        global_send_global_start = time.time()
         assert (
             client_idx >= 0 and client_idx < self.comm_size
         ), "Please provide a valid destination client index!"
@@ -123,6 +134,8 @@ class MpiCommunicator:
                     source=self.dests[client_idx], tag=self.dests[client_idx]
                 ),
             )
+            global_send_global_end = time.time()
+            print(f"======{self.comm_rank} send: meta length {len(payload)}, model length {len(model_bytes)}, spent time {global_send_global_end - global_send_global_start}, start at {global_send_global_start}, end at {global_send_global_end}============", flush=True)
 
     def send_local_model_to_server(self, model: Union[dict, OrderedDict], dest: int):
         """
@@ -130,6 +143,7 @@ class MpiCommunicator:
         :param `model`: the local model state dictionary to be sent
         :param `dest`: the rank of the destination MPI process (server)
         """
+        global_send_local_start = time.time()
         if self.compressor is not None:
             model_bytes, _ = self.compressor.compress_model(model)
         else:
@@ -140,12 +154,16 @@ class MpiCommunicator:
             dest=dest,
             tag=self.comm_rank + self.comm_size,
         )
+        global_send_local_end = time.time()
+        print(f"======{self.comm_rank} send: model length {len(model_bytes)}, spent time {global_send_local_end - global_send_local_start}, start at {global_send_local_start}, end at {global_send_local_end}============", flush=True)
+
 
     def recv_local_model_from_client(self, model_copy=None):
         """
         Server receives the local model state dict from one finishing client.
         :param `model_copy` [Optional]: a copy of the global model state dict ONLY used for decompression
         """
+        global_recv_local_start = time.time()
         while True:
             queue_idx, model_size = MPI.Request.waitany(self.recv_queue)
             if queue_idx != MPI.UNDEFINED:
@@ -168,6 +186,8 @@ class MpiCommunicator:
                 else:
                     model = self._bytes_to_obj(model_bytes.tobytes())
                 self.queue_status[client_idx] = False
+                global_recv_local_end = time.time()
+                print(f"======{self.comm_rank} recv: model length {len(model_bytes)}, spent time {global_recv_local_end - global_recv_local_start}, start at {global_recv_local_start}, end at {global_recv_local_end}============", flush=True)
                 return client_idx, model
 
     def recv_global_model_from_server(self, source):
@@ -176,6 +196,7 @@ class MpiCommunicator:
         :param `source`: the rank of the source MPI process (server)
         :return (`model`, `args`): the global model state dictionary and optional arguments received by the client
         """
+        global_recv_global_start = time.time()
         meta_data = self.comm.recv(source=source, tag=self.comm_rank)
         if isinstance(meta_data, tuple):
             model_size, args = meta_data[0], meta_data[1]
@@ -186,6 +207,8 @@ class MpiCommunicator:
         model_bytes = np.empty(model_size, dtype=np.byte)
         self.comm.Recv(model_bytes, source=source, tag=self.comm_rank + self.comm_size)
         model = self._bytes_to_obj(model_bytes.tobytes())
+        global_recv_global_end = time.time()
+        print(f"======{self.comm_rank} recv: model length {len(model_bytes)}, spent time {global_recv_global_end - global_recv_global_start}, start at {global_recv_global_start}, end at {global_recv_global_end}============", flush=True)
         return model if args is None else (model, args)
 
     def cleanup(self):
