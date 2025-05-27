@@ -122,7 +122,6 @@ def main():
     start_time = time.time()
 
     ## User-defined model
-    model = get_model(args)
     loss_fn = get_loss(args.loss_fn, args.loss_fn_name)
     metric = get_metric(args.metric, args.metric_name)
 
@@ -143,19 +142,26 @@ def main():
 
     print("-------Loading_Time=", time.time() - start_time)  
 
-    ## Running
-    if args.num_clients == comm_size -1:
-        if comm_rank == 0:
-            rms.run_server(cfg, comm, model, loss_fn, args.num_clients, test_dataset, args.dataset, metric)
-        else:
-            rms.run_client(cfg, comm, model, loss_fn, train_datasets, test_dataset, metric)
-    else:
-        if comm_rank == 0:
-            rm.run_server(cfg, comm, model, loss_fn, args.num_clients, test_dataset, args.dataset, metric)
-        else:
-            rm.run_client(cfg, comm, model, loss_fn, args.num_clients, train_datasets, test_dataset, metric)
+    models = ["resnet18", "VGG", "ViT"]
 
-    print("------DONE------", comm_rank)
+    ## Running
+    for model_tag in models:
+        print(f"rank {comm_rank} model {model_tag}------START------")
+        start_time = time.time()
+        args.model = model_tag
+        model = get_model(args)
+        if args.num_clients == comm_size -1:
+            if comm_rank == 0:
+                rms.run_server(cfg, comm, model, loss_fn, args.num_clients, test_dataset, args.dataset, metric)
+            else:
+                rms.run_client(cfg, comm, model, loss_fn, train_datasets, test_dataset, metric)
+        else:
+            if comm_rank == 0:
+                rm.run_server(cfg, comm, model, loss_fn, args.num_clients, test_dataset, args.dataset, metric)
+            else:
+                rm.run_client(cfg, comm, model, loss_fn, args.num_clients, train_datasets, test_dataset, metric)
+
+        print(f"rank {comm_rank} model {model_tag} ------DONE------ start at {start_time} end at {time.time()} for {time.time() - start_time} ")
 
 if __name__ == "__main__":
     main()

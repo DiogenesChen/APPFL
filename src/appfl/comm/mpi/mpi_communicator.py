@@ -6,6 +6,8 @@ from appfl.compressor import Compressor
 from typing import Any, Optional, Union
 import time
 
+from datetime import datetime
+
 class MpiCommunicator:
     """
     A general MPI communicator for synchronous or asynchronous distributed/federated/decentralized 
@@ -27,6 +29,11 @@ class MpiCommunicator:
     def _bytes_to_obj(self, bytes_obj: bytes) -> Any:
         """Convert bytes to an object."""
         return pickle.loads(bytes_obj)
+    
+    def current_time(self):
+        now = datetime.now()
+        formatted_time = now.strftime('%Y-%m-%d %H:%M:%S.') + f"{now.microsecond // 1000:03d}"
+        return formatted_time
 
     def scatter(self, contents, source: int) -> Any:
         """
@@ -42,7 +49,7 @@ class MpiCommunicator:
             ), "The size of the contents is not equal to the number of clients in scatter!"
         content = self.comm.scatter(contents, root=source)
         global_scatter_end = time.time()
-        print(f"======{self.comm_rank} scatter: message length {len(contents)}, spent time {global_scatter_end - global_scatter_start}, start at {global_scatter_start}, end at {global_scatter_end}======", flush=True)
+        print(f"{self.current_time()} [MPI] rank {self.comm_rank} scatter: spent time {global_scatter_end - global_scatter_start}, start at {global_scatter_start}, end at {global_scatter_end}", flush=True)
         return content
 
     def gather(self, content, dest: int):
@@ -55,7 +62,7 @@ class MpiCommunicator:
         global_gather_start = time.time()
         contents = self.comm.gather(content, root=dest)
         global_gather_end = time.time()
-        print(f"======{self.comm_rank} gather: message length {len(contents)}, spent time {global_gather_end - global_gather_start}, start at {global_gather_start}, end at {global_gather_end}======", flush=True)
+        print(f"{self.current_time()} [MPI] rank {self.comm_rank} gather: spent time {global_gather_end - global_gather_start}, start at {global_gather_start}, end at {global_gather_end}", flush=True)
         return contents
 
     def broadcast_global_model(self, model: Optional[Union[dict, OrderedDict]]=None, args: Optional[dict]=None):
@@ -89,7 +96,7 @@ class MpiCommunicator:
             self.recv_queue = [self.comm.irecv(source=i, tag=i) for i in self.dests]
             self.queue_status = [True for _ in range(self.comm_size - 1)]
             global_broadcast_end = time.time()
-            print(f"======{self.comm_rank} broadcast: message length {len(model_bytes)}, times {len(self.dests)}, spent time {global_broadcast_end - global_broadcast_start}, start at {global_broadcast_start}, end at {global_broadcast_end}======", flush=True)
+            print(f"{self.current_time()} [MPI] rank {self.comm_rank} broadcast: message length {len(model_bytes)}, times {len(self.dests)}, spent time {global_broadcast_end - global_broadcast_start}, start at {global_broadcast_start}, end at {global_broadcast_end}", flush=True)
 
     def send_global_model_to_client(self, model: Optional[Union[dict, OrderedDict]]=None, args: Optional[dict]=None, client_idx: int=-1):
         """
@@ -135,7 +142,7 @@ class MpiCommunicator:
                 ),
             )
             global_send_global_end = time.time()
-            print(f"======{self.comm_rank} send: meta length {len(payload)}, model length {len(model_bytes)}, spent time {global_send_global_end - global_send_global_start}, start at {global_send_global_start}, end at {global_send_global_end}============", flush=True)
+            print(f"{self.current_time()} [MPI] rank {self.comm_rank} send: meta length {len(payload)}, model length {len(model_bytes)}, spent time {global_send_global_end - global_send_global_start}, start at {global_send_global_start}, end at {global_send_global_end}", flush=True)
 
     def send_local_model_to_server(self, model: Union[dict, OrderedDict], dest: int):
         """
@@ -155,7 +162,7 @@ class MpiCommunicator:
             tag=self.comm_rank + self.comm_size,
         )
         global_send_local_end = time.time()
-        print(f"======{self.comm_rank} send: model length {len(model_bytes)}, spent time {global_send_local_end - global_send_local_start}, start at {global_send_local_start}, end at {global_send_local_end}============", flush=True)
+        print(f"{self.current_time()} [MPI] rank {self.comm_rank} send: model length {len(model_bytes)}, spent time {global_send_local_end - global_send_local_start}, start at {global_send_local_start}, end at {global_send_local_end}", flush=True)
 
 
     def recv_local_model_from_client(self, model_copy=None):
@@ -187,7 +194,7 @@ class MpiCommunicator:
                     model = self._bytes_to_obj(model_bytes.tobytes())
                 self.queue_status[client_idx] = False
                 global_recv_local_end = time.time()
-                print(f"======{self.comm_rank} recv: model length {len(model_bytes)}, spent time {global_recv_local_end - global_recv_local_start}, start at {global_recv_local_start}, end at {global_recv_local_end}============", flush=True)
+                print(f"{self.current_time()} [MPI] rank {self.comm_rank} recv: model length {len(model_bytes)}, spent time {global_recv_local_end - global_recv_local_start}, start at {global_recv_local_start}, end at {global_recv_local_end}", flush=True)
                 return client_idx, model
 
     def recv_global_model_from_server(self, source):
@@ -208,7 +215,7 @@ class MpiCommunicator:
         self.comm.Recv(model_bytes, source=source, tag=self.comm_rank + self.comm_size)
         model = self._bytes_to_obj(model_bytes.tobytes())
         global_recv_global_end = time.time()
-        print(f"======{self.comm_rank} recv: model length {len(model_bytes)}, spent time {global_recv_global_end - global_recv_global_start}, start at {global_recv_global_start}, end at {global_recv_global_end}============", flush=True)
+        print(f"{self.current_time()} [MPI] rank {self.comm_rank} recv: model length {len(model_bytes)}, spent time {global_recv_global_end - global_recv_global_start}, start at {global_recv_global_start}, end at {global_recv_global_end}", flush=True)
         return model if args is None else (model, args)
 
     def cleanup(self):

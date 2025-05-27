@@ -1,6 +1,7 @@
 import os
 import torch
 import torchvision
+from torch.utils.data import Subset
 from mpi4py import MPI
 from typing import Optional, List
 from appfl.config import *
@@ -41,6 +42,7 @@ def get_cifar10(
 
     # Training data for multiple clients
     train_data_raw = torchvision.datasets.CIFAR10(dir, download=False, train=True, transform=train_transform("CIFAR10"))
+    small_train_data = Subset(train_data_raw, range(1000))
 
     # Obtain the visualization output filename
     if visualization:

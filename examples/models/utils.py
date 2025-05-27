@@ -2,6 +2,8 @@ from .cnn import CNN
 from .resnet import ResNet18
 from .resnet_legacy import resnet18
 from .lstm import LSTMForecast
+from .vit import ViT
+from .vgg import VGG
 
 def get_model(args):
     ## User-defined model
@@ -14,6 +16,10 @@ def get_model(args):
         model = resnet18(args.num_channel, args.num_classes, args.pretrained)
     elif args.model == "LSTM":
         model = LSTMForecast(n_features=args.n_features,n_lookback=args.n_lookback,n_lstm_layers=args.n_lstm_layers,n_hidden_size=args.n_hidden_size)
+    elif args.model == "ViT":
+        model = ViT(image_size = 32, patch_size = 4, num_classes = 10, dim = 512, depth = 6, heads = 8, mlp_dim = 512, dropout = 0.1, emb_dropout = 0.1)
+    elif args.model == "VGG":
+        model = VGG('VGG16')
     else:
         raise NotImplementedError
     return model

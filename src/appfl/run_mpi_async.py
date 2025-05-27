@@ -86,7 +86,7 @@ def run_server(
     global_broadcast_start = time.time()
     communicator.broadcast_global_model(global_model)
     global_broadcast_end = time.time()
-    print(f"======Server global_broadcast_time: {global_broadcast_end - global_broadcast_start}, start at {global_broadcast_start}, end at {global_broadcast_end}======", flush=True)
+    print(f"{communicator.current_time()} [APPFL] Server global_broadcast_time: {global_broadcast_end - global_broadcast_start}, start at {global_broadcast_start}, end at {global_broadcast_end}", flush=True)
 
     ## Main server training loop
     test_loss, test_accuracy, best_accuracy = 0.0, 0.0, 0.0
@@ -95,14 +95,14 @@ def run_server(
         global_recv_start = time.time()
         client_idx, local_model = communicator.recv_local_model_from_client(copy.deepcopy(server.model))
         global_recv_end = time.time()
-        print(f"======Server global_recv_time: {global_recv_end - global_recv_start}, start at {global_recv_start}, end at {global_recv_end}======", flush=True)
-        global_update_start = time.time()
+        print(f"{communicator.current_time()} [APPFL] Server global_recv_time: {global_recv_end - global_recv_start}, start at {global_recv_start}, end at {global_recv_end}", flush=True)
         local_update_start = client_start_time[client_idx]
         local_update_time = time.time() - client_start_time[client_idx]
 
+        global_update_start = time.time()
         server.update(local_model, client_model_step[client_idx], client_idx)
         global_update_time = time.time() - global_update_start
-        print(f"======Server global_update_time: {global_update_time}, start at {global_update_start}, end at {time.time()}======", flush=True)
+        print(f"{communicator.current_time()} [APPFL] Server global_update_time: {global_update_time}, start at {global_update_start}, end at {time.time()}", flush=True)
         if iter < cfg.num_epochs:
             client_model_step[client_idx] = server.global_step
             client_start_time[client_idx] = time.time()
@@ -141,7 +141,7 @@ def run_server(
         global_send_start = time.time()
         communicator.send_global_model_to_client(None, {"done": True}, i)
         global_send_end = time.time()
-        print(f"======Server global_send_time: {global_send_end - global_send_start}, start at {global_send_start}, end at {global_send_end}======", flush=True)
+        print(f"{communicator.current_time()} [APPFL] Server global_send_time: {global_send_end - global_send_start}, start at {global_send_start}, end at {global_send_end}", flush=True)
 
     ## Summary
     server.logging_summary(cfg, logger)
@@ -220,7 +220,7 @@ def run_client(
         local_recv_start = time.time()
         model = communicator.recv_global_model_from_server(source=0)
         local_recv_end = time.time()
-        print(f"======Client {comm.Get_rank()} recv_local_model_from_server: {local_recv_end - local_recv_start}, start at {local_recv_start}, end at {local_recv_end}======", flush=True)
+        print(f"{communicator.current_time()} [APPFL] Client {comm.Get_rank()} recv_local_model_from_server: {local_recv_end - local_recv_start}, start at {local_recv_start}, end at {local_recv_end}", flush=True)
         local_update_start = time.time()
         if isinstance(model, tuple):
             model, done = model[0], model[1]["done"]
@@ -231,7 +231,7 @@ def run_client(
         client.model.load_state_dict(model)
         client.update()
         local_update_end = time.time()
-        print(f"======Client {comm.Get_rank()} client update: {local_update_end - local_update_start}, start at {local_update_start}, end at {local_update_end}======", flush=True)
+        print(f"{communicator.current_time()} [APPFL] Client {comm.Get_rank()} client update: {local_update_end - local_update_start}, start at {local_update_start}, end at {local_update_end}", flush=True)
         local_send_start = time.time()
         ## Compute gradient if the algorithm is gradient-based
         if cfg.fed.args.gradient_based:
@@ -240,5 +240,5 @@ def run_client(
             local_model = copy.deepcopy(client.primal_state)
         communicator.send_local_model_to_server(local_model, dest=0)
         local_send_end = time.time()
-        print(f"======Client {comm.Get_rank()} send_local_model_to_server: {local_send_end - local_send_start}, start at {local_send_start}, end at {local_send_end}======", flush=True)
+        print(f"{communicator.current_time()} [APPFL] Client {comm.Get_rank()} send_local_model_to_server: {local_send_end - local_send_start}, start at {local_send_start}, end at {local_send_end}", flush=True)
     outfile.close()
